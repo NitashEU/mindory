@@ -1,0 +1,25 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "Frontend application for the project",
+  "main": "src/main.ts",
+  "scripts": {
+    "serve": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext .ts,.vue",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "vue": "^3.2.0",
+    "vue-router": "^4.0.0",
+    "vuex": "^4.0.0"
+  },
+  "devDependencies": {
+    "vite": "^2.0.0",
+    "eslint": "^7.0.0",
+    "vitest": "^0.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
