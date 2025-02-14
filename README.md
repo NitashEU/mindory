@@ -28,6 +28,10 @@ Instructions on how to install and set up the project locally.
    cd ../frontend
    npm install
    ```
+4. Alternatively, from the root directory, run:
+   ```
+   ./setup.sh
+   ```
 
 ## Usage
 

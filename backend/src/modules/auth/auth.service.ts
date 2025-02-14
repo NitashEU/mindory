@@ -1,19 +1,34 @@
 import { Injectable } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SupabaseService } from '../../common/services/supabase.service';
 
 @Injectable()
 export class AuthService {
-  private users = []; // This should be replaced with a proper user repository
+  constructor(private supabase: SupabaseService) {}
 
-  async validateUser(loginDto: LoginDto): Promise<any> {
-    const user = this.users.find(user => user.username === loginDto.username && user.password === loginDto.password);
-    return user ? user : null;
+  async validateUser(loginDto: LoginDto) {
+    const { data, error } = await this.supabase.client.auth.signInWithPassword({
+      email: loginDto.username,
+      password: loginDto.password,
+    });
+
+    if (error) throw error;
+    return data;
   }
 
-  async registerUser(registerDto: RegisterDto): Promise<any> {
-    const newUser = { id: Date.now(), ...registerDto };
-    this.users.push(newUser);
-    return newUser;
+  async registerUser(registerDto: RegisterDto) {
+    const { data, error } = await this.supabase.client.auth.signUp({
+      email: registerDto.email,
+      password: registerDto.password,
+      options: {
+        data: {
+          username: registerDto.username,
+        },
+      },
+    });
+
+    if (error) throw error;
+    return data;
   }
 }

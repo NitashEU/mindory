@@ -1,37 +1,52 @@
+import { CreateUserDto } from './dto/create-user.dto';
 import { Injectable } from '@nestjs/common';
+import { SupabaseService } from '../../common/services/supabase.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
-    private users = [];
+  constructor(private readonly supabase: SupabaseService) {}
 
-    createUser(userData: any) {
-        const newUser = { id: Date.now(), ...userData };
-        this.users.push(newUser);
-        return newUser;
-    }
+  async createUser(userData: CreateUserDto) {
+    const { data, error } = await this.supabase.client
+      .from("users")
+      .insert([userData])
+      .select()
+      .single();
 
-    findAllUsers() {
-        return this.users;
-    }
+    if (error) throw error;
+    return data;
+  }
 
-    findUserById(id: number) {
-        return this.users.find(user => user.id === id);
-    }
+  async findAllUsers() {
+    const { data, error } = await this.supabase.client
+      .from("users")
+      .select("*");
 
-    updateUser(id: number, updatedData: any) {
-        const userIndex = this.users.findIndex(user => user.id === id);
-        if (userIndex > -1) {
-            this.users[userIndex] = { ...this.users[userIndex], ...updatedData };
-            return this.users[userIndex];
-        }
-        return null;
-    }
+    if (error) throw error;
+    return data;
+  }
 
-    deleteUser(id: number) {
-        const userIndex = this.users.findIndex(user => user.id === id);
-        if (userIndex > -1) {
-            return this.users.splice(userIndex, 1);
-        }
-        return null;
-    }
+  async findUserById(id: number) {
+    const { data, error } = await this.supabase.client
+      .from("users")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateUser(id: number, updatedData: UpdateUserDto) {
+    const { data, error } = await this.supabase.client
+      .from("users")
+      .update(updatedData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
 }

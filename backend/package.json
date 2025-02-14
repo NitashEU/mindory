@@ -5,23 +5,34 @@
   "main": "dist/main.js",
   "scripts": {
     "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "dev": "nest start --watch",
     "build": "tsc -p tsconfig.build.json",
-    "test": "jest"
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@nestjs/common": "^9.0.0",
     "@nestjs/core": "^9.0.0",
+    "@nestjs/config": "^3.1.1",
     "@nestjs/platform-express": "^9.0.0",
-    "rxjs": "^7.0.0",
+    "@supabase/supabase-js": "^2.39.3",
+    "voyageai": "^0.0.3-1",
+    "class-transformer": "^0.4.0",
     "class-validator": "^0.13.0",
-    "class-transformer": "^0.4.0"
+    "rxjs": "^7.0.0"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.2",
     "@nestjs/testing": "^9.0.0",
-    "typescript": "^4.5.0",
-    "ts-jest": "^27.0.0",
+    "@types/express": "^5.0.0",
+    "@types/joi": "^17.2.3",
     "jest": "^27.0.0",
-    "ts-loader": "^9.0.0"
+    "joi": "^17.13.3",
+    "ts-jest": "^27.0.0",
+    "ts-loader": "^9.0.0",
+    "typescript": "^4.5.0"
   },
   "author": "",
   "license": "MIT"
