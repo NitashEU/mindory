@@ -2,6 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as walk from 'ignore-walk';
 import { Injectable } from '@nestjs/common';
+import Parser from 'tree-sitter';
+import Lua from '@tree-sitter-grammars/tree-sitter-lua';
+import { VoyageService } from '@/common/services/voyage.service';
 
 // Define filtering options for codebase inputs
 interface CodebaseFilterOptions {
@@ -15,16 +18,56 @@ interface CodebaseFilterOptions {
 
 @Injectable()
 export class CodebaseInputService {
+  constructor(
+    private voyageService: VoyageService,
+  ) { }
   async processPathInput(
     inputPath: string,
     options?: CodebaseFilterOptions
-  ): Promise<{ name: string; files: string[] }> {
+  ): Promise<{ name: string; files: { file: string; tree: Parser.Tree }[] }> {
     if (!fs.existsSync(inputPath)) {
       throw new Error("Directory not found");
     }
     const files = this.getFilesRecursive(inputPath);
     const filteredFiles = this.applyFilters(files, options);
-    return { name: "Path Input", files: filteredFiles };
+    const parser = new Parser();
+    parser.setLanguage(Lua as unknown as Parser.Language);
+
+    const parsedFiles: { file: string; tree: Parser.Tree }[] = [];
+    const nodeTypes = ["assignment_statement", "function_declaration"];
+    for (const file of filteredFiles) {
+
+      if (!file.endsWith(".lua")) continue;
+      const content = fs.readFileSync(path.join(inputPath, file), 'utf8')
+      const tree = parser.parse(content);
+      const snippets = []
+      const cursor = tree.walk();
+      while (cursor.gotoFirstChild()) {
+        if (nodeTypes.includes(cursor.nodeType)) {
+          snippets.push(cursor.currentNode.text)
+        }
+        while (cursor.gotoNextSibling()) {
+          if (nodeTypes.includes(cursor.nodeType)) {
+            snippets.push(cursor.currentNode.text)
+          }
+        }
+      }
+      if (snippets.length > 0) {
+        console.log(snippets)
+        const maxBatchSize = 120;
+        const batches = [];
+        for (let i = 0; i < snippets.length; i += maxBatchSize) {
+          batches.push(snippets.slice(i, i + maxBatchSize));
+        }
+        for (const batch of batches) {
+          const b = await this.voyageService.generateEmbeddings(batch, "voyage-code-3")
+          console.log(b)
+        }
+      }
+      parsedFiles.push({ file, tree });
+      // Process the tree here
+    }
+    return { name: "Path Input", files: parsedFiles };
   }
 
   async processRepoInput(

@@ -4,6 +4,7 @@ import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { Module } from '@nestjs/common';
 import { SupabaseService } from './services/supabase.service';
+import { VoyageService } from './services/voyage.service';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { SupabaseService } from './services/supabase.service';
       isGlobal: true,
     }),
   ],
-  providers: [LoggingInterceptor, HttpExceptionFilter, SupabaseService],
-  exports: [LoggingInterceptor, HttpExceptionFilter, SupabaseService],
+  providers: [LoggingInterceptor, HttpExceptionFilter, SupabaseService, VoyageService],
+  exports: [LoggingInterceptor, HttpExceptionFilter, SupabaseService, VoyageService],
 })
-export class CommonModule {}
+export class CommonModule { }

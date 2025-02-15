@@ -23,11 +23,13 @@ async function bootstrap() {
     .addTag("auth")
     .addTag("users")
     .addTag("codebase-input")
-    .addTag("embeddings")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("swagger", app, document);
+  SwaggerModule.setup("swagger", app, document, {
+    jsonDocumentUrl: "/swagger-json",
+    yamlDocumentUrl: "/swagger-yaml",
+  });
 
   // Set global prefix AFTER Swagger setup
   app.setGlobalPrefix("api");

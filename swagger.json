@@ -1,0 +1,350 @@
+{
+    "openapi": "3.0.0",
+    "paths": {
+        "/auth/login": {
+            "post": {
+                "operationId": "AuthController_login",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "operationId": "AuthController_register",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/users": {
+            "post": {
+                "operationId": "UserController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateUserDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                }
+            },
+            "get": {
+                "operationId": "UserController_findAll",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/users/{id}": {
+            "get": {
+                "operationId": "UserController_findOne",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "UserController_update",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateUserDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/codebase-input/path": {
+            "post": {
+                "operationId": "CodebaseInputController_inputPath",
+                "summary": "Process input from a file path",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PathInputDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successfully processed path input"
+                    },
+                    "400": {
+                        "description": "Bad request"
+                    }
+                },
+                "tags": [
+                    "codebase-input"
+                ]
+            }
+        },
+        "/codebase-input/repo": {
+            "post": {
+                "operationId": "CodebaseInputController_inputRepo",
+                "summary": "Process input from a repository URL",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RepoInputDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successfully processed repository input"
+                    },
+                    "400": {
+                        "description": "Bad request"
+                    }
+                },
+                "tags": [
+                    "codebase-input"
+                ]
+            }
+        },
+        "/codebase-input/zip": {
+            "post": {
+                "operationId": "CodebaseInputController_inputZip",
+                "summary": "Process input from a ZIP file",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ZipInputDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successfully processed ZIP input"
+                    },
+                    "400": {
+                        "description": "Bad request"
+                    }
+                },
+                "tags": [
+                    "codebase-input"
+                ]
+            }
+        }
+    },
+    "info": {
+        "title": "Codebase API",
+        "description": "The Codebase API description",
+        "version": "1.0",
+        "contact": {}
+    },
+    "tags": [
+        {
+            "name": "auth",
+            "description": ""
+        },
+        {
+            "name": "users",
+            "description": ""
+        },
+        {
+            "name": "codebase-input",
+            "description": ""
+        }
+    ],
+    "servers": [],
+    "components": {
+        "securitySchemes": {
+            "bearer": {
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "type": "http"
+            }
+        },
+        "schemas": {
+            "LoginDto": {
+                "type": "object",
+                "properties": {}
+            },
+            "RegisterDto": {
+                "type": "object",
+                "properties": {}
+            },
+            "CreateUserDto": {
+                "type": "object",
+                "properties": {}
+            },
+            "UpdateUserDto": {
+                "type": "object",
+                "properties": {}
+            },
+            "PathInputDto": {
+                "type": "object",
+                "properties": {
+                    "inputPath": {
+                        "type": "string",
+                        "description": "Path to the directory to process"
+                    },
+                    "includeDocs": {
+                        "type": "boolean",
+                        "description": "Include documentation files",
+                        "default": true
+                    },
+                    "codeFilters": {
+                        "description": "Filters to apply to code files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "docsFilters": {
+                        "description": "Filters to apply to documentation files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "inputPath"
+                ]
+            },
+            "RepoInputDto": {
+                "type": "object",
+                "properties": {
+                    "repoUrl": {
+                        "type": "string",
+                        "description": "URL of the repository to process"
+                    },
+                    "includeDocs": {
+                        "type": "boolean",
+                        "description": "Include documentation files",
+                        "default": true
+                    },
+                    "codeFilters": {
+                        "description": "Filters to apply to code files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "docsFilters": {
+                        "description": "Filters to apply to documentation files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "repoUrl"
+                ]
+            },
+            "ZipInputDto": {
+                "type": "object",
+                "properties": {
+                    "zipFilePath": {
+                        "type": "string",
+                        "description": "Path to the ZIP file to process"
+                    },
+                    "includeDocs": {
+                        "type": "boolean",
+                        "description": "Include documentation files",
+                        "default": true
+                    },
+                    "codeFilters": {
+                        "description": "Filters to apply to code files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "docsFilters": {
+                        "description": "Filters to apply to documentation files",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "zipFilePath"
+                ]
+            }
+        }
+    }
+}

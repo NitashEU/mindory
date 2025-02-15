@@ -19,6 +19,7 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.1.0",
     "@supabase/supabase-js": "^2.39.3",
+    "@tree-sitter-grammars/tree-sitter-lua": "^0.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "ignore-walk": "^7.0.0",
@@ -26,6 +27,7 @@
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.0",
+    "tree-sitter": "^0.22.4",
     "voyageai": "^0.0.3-1"
   },
   "devDependencies": {
