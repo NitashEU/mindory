@@ -1,39 +1,37 @@
-import { Module, OnModuleInit, Injectable, Logger } from '@nestjs/common';
-import { SupabaseService } from '@/common/services/supabase.service';
-import { CommonModule } from '@/common/common.module';
-import * as fs from 'fs';
-import * as path from 'path';
-
-@Injectable()
-class DatabaseInitializer implements OnModuleInit {
-	private readonly logger = new Logger('DatabaseInitializer');
-
-	constructor(private readonly supabaseService: SupabaseService) {}
-
-	async onModuleInit() {
-		try {
-			const migrationPath = path.join(__dirname, 'migrations', 'create_code_entity_graph.sql');
-			const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-
-			const { error } = await this.supabaseService.getClient().rpc('exec_sql', {
-				sql_string: migrationSql
-			});
-
-			if (error) {
-				this.logger.error(`Failed to run migration: ${error.message}`);
-				throw error;
-			}
-
-			this.logger.log('Database migrations completed successfully');
-		} catch (error) {
-			this.logger.error(`Failed to initialize database: ${error.message}`);
-			throw error;
-		}
-	}
-}
+import { Module, OnModuleInit } from '@nestjs/common';
+import { Neo4jService } from './neo4j.service';
 
 @Module({
-	imports: [CommonModule],
-	providers: [DatabaseInitializer],
+	providers: [Neo4jService],
+	exports: [Neo4jService],
 })
-export class DatabaseModule {}
+
+export class DatabaseModule implements OnModuleInit {
+	constructor(private readonly neo4jService: Neo4jService) {}
+
+	async onModuleInit() {
+		// Create indexes for efficient querying
+		await this.neo4jService.write(`
+			CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE
+		`);
+
+		await this.neo4jService.write(`
+			CREATE CONSTRAINT IF NOT EXISTS FOR (r:Repository) REQUIRE r.id IS UNIQUE
+		`);
+
+		await this.neo4jService.write(`
+			CREATE CONSTRAINT IF NOT EXISTS FOR (e:CodeEntity) REQUIRE e.name IS UNIQUE
+		`);
+
+		// Create vector index for semantic search
+		await this.neo4jService.write(`
+			CALL db.index.vector.createNodeIndex(
+				'code-entity-embeddings',
+				'CodeEntity',
+				'vector',
+				1536,
+				'cosine'
+			)
+		`);
+	}
+}

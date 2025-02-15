@@ -1,12 +1,11 @@
 import Lua from "@tree-sitter-grammars/tree-sitter-lua";
 import Parser from "tree-sitter";
-import { connect, Connection } from "@lancedb/lancedb";
-import { ConfigService } from "@nestjs/config";
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { VoyageService } from "@/common/services/voyage.service";
-import { SupabaseService } from "@/common/services/supabase.service";
+import { Injectable, Logger } from "@nestjs/common";
+import { SearchResult } from "./interfaces/search-result.interface";
+import { Neo4jService } from "@/database/neo4j.service";
+import { VoyageService } from "@/common/services";
 
-import { SearchResult } from './interfaces/search-result.interface';
+
 
 interface CodeEntity {
 
@@ -21,32 +20,17 @@ interface CodeEntity {
 }
 
 @Injectable()
-export class CodeProcessingService implements OnModuleInit {
+export class CodeProcessingService {
   private readonly logger = new Logger(CodeProcessingService.name);
   private readonly parser: Parser;
-  private lanceDb: Connection;
-  private readonly supabase;
 
   constructor(
-    private readonly configService: ConfigService,
     private readonly voyageService: VoyageService,
-    private readonly supabaseService: SupabaseService
+    private readonly neo4jService: Neo4jService
   ) {
+
     this.parser = new Parser();
     this.parser.setLanguage(Lua as unknown as Parser.Language);
-    this.supabase = this.supabaseService.client;
-  }
-
-  async onModuleInit() {
-    try {
-      const lanceDbPath = this.configService.get('lancedb.path');
-      this.lanceDb = await connect(lanceDbPath);
-      this.logger.log('LanceDB initialized successfully');
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to initialize LanceDB: ${errorMessage}`);
-      throw error;
-    }
   }
 
   async processRepository(
@@ -74,8 +58,7 @@ export class CodeProcessingService implements OnModuleInit {
       }
 
       await Promise.all([
-        this.storeInLanceDb(entities),
-        this.storeInPgGraph(entities),
+        this.storeInNeo4j(entities),
       ]);
     } catch (error) {
       this.logger.error(
@@ -85,43 +68,11 @@ export class CodeProcessingService implements OnModuleInit {
     }
   }
 
-  private async storeInLanceDb(entities: CodeEntity[]): Promise<void> {
+  private async storeInNeo4j(entities: CodeEntity[]): Promise<void> {
     try {
-      const tableName = 'code_entities';
-      let table;
-      
-      try {
-        table = await this.lanceDb.openTable(tableName);
-      } catch {
-        if (entities.length > 0) {
-          table = await this.lanceDb.createTable(tableName, entities);
-        } else {
-          this.logger.warn("No entities to create LanceDB table");
-          return;
-        }
-      }
-
-      if (entities.length > 0) {
-        await table.add(entities);
-      }
+      await this.neo4jService.createCodeEntityGraph(entities);
     } catch (error) {
-        this.logger.error(`Failed to store in LanceDB: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
-    }
-  }
-
-  private async storeInPgGraph(entities: CodeEntity[]): Promise<void> {
-    try {
-      const { error } = await this.supabase
-        .rpc('create_code_entity_graph', {
-          entities: entities
-        });
-
-      if (error) {
-        throw new Error(`Failed to store in pggraph: ${error.message}`);
-      }
-    } catch (error) {
-        this.logger.error(`Failed to store in Supabase pggraph: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.error(`Failed to store in Neo4j: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
@@ -228,31 +179,38 @@ export class CodeProcessingService implements OnModuleInit {
       );
       const queryVector = embeddings.data![0].embedding;
 
-      const table = await this.lanceDb.openTable('code_entities');
-      const results = await table.search(queryVector).limit(limit).execute();
+      const cypherQuery = `
+        WITH $queryVector AS queryVector
+        CALL db.index.vector.queryNodes('code-entity-embeddings', $limit, queryVector)
+        YIELD node AS entity, score
+        OPTIONAL MATCH (entity)-[:DEPENDS_ON]->(dependency)
+        RETURN entity, score, collect(dependency) AS dependencies
+      `;
 
-      const enrichedResults = await Promise.all(
-        results.map(async (result): Promise<SearchResult> => {
-          const { data, error } = await this.supabase
-            .rpc('get_entity_dependencies', {
-              entity_name: result.name
-            });
+      const result = await this.neo4jService.read(cypherQuery, {
+        queryVector,
+        limit,
+      });
 
-          return {
-            entity: {
-              type: result.type,
-              name: result.name,
-              content: result.content,
-              filePath: result.filePath,
-              startLine: result.startLine,
-              endLine: result.endLine,
-              dependencies: result.dependencies,
-            },
-            score: result.score,
-            dependencies: error ? [] : data
-          };
-        })
-      );
+        const enrichedResults = result.records.map((record: Record<string, any>) => {
+        const entity = record.get('entity').properties;
+        const score = record.get('score');
+        const dependencies = record.get('dependencies').map((dep: { properties: { name: string } }) => dep.properties.name);
+
+        return {
+          entity: {
+            type: entity.type,
+            name: entity.name,
+            content: entity.content,
+            filePath: entity.filePath,
+            startLine: entity.startLine,
+            endLine: entity.endLine,
+            dependencies: entity.dependencies,
+          },
+          score: score,
+          dependencies: dependencies,
+        };
+      }) as SearchResult[];
 
       return enrichedResults;
     } catch (error) {
@@ -261,4 +219,5 @@ export class CodeProcessingService implements OnModuleInit {
     }
   }
 }
+
 

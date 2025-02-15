@@ -8,12 +8,13 @@ import { RepositoriesModule } from './modules/repositories/repositories.module';
 import { DatabaseModule } from './database/database.module';
 import supabaseConfig from './config/supabase.config';
 import lancedbConfig from './config/lancedb.config';
+import neo4jConfig from './config/neo4j.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [supabaseConfig, lancedbConfig],
+      load: [supabaseConfig, lancedbConfig, neo4jConfig],
     }),
     CommonModule,
     DatabaseModule,

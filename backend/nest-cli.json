@@ -6,8 +6,12 @@
       {
         "include": "**/*.hbs",
         "outDir": "dist"
+        },
+        {
+        "include": "database/migrations/**/*",
+        "outDir": "dist"
+        }
+      ],
+      "watchAssets": true
       }
-    ],
-    "watchAssets": true
-  }
-}
+    }

@@ -1,56 +1,74 @@
 import { Injectable } from '@nestjs/common';
-import { SupabaseService } from '../../common/services/supabase.service';
 import { CreateRepositoryDto, UpdateRepositoryDto, Repository } from './dto/repository.dto';
+import { Neo4jService } from '@/database/neo4j.service';
+
 
 @Injectable()
 export class RepositoriesService {
-	constructor(private readonly supabaseService: SupabaseService) {}
+	constructor(private readonly neo4jService: Neo4jService) {}
 
 	async create(userId: string, createRepositoryDto: CreateRepositoryDto): Promise<Repository> {
-		const { data, error } = await this.supabaseService.client
-			.from('repositories')
-			.insert({
-				...createRepositoryDto,
-				user_id: userId
+		const result = await this.neo4jService.write(`
+			MATCH (u:User {id: $userId})
+			CREATE (r:Repository {
+				id: randomUUID(),
+				name: $name,
+				url: $url,
+				description: $description,
+				user_id: $userId,
+				created_at: datetime(),
+				updated_at: datetime()
 			})
-			.select()
-			.single();
+			CREATE (u)-[:OWNS]->(r)
+			RETURN r
+		`, {
+			userId,
+			...createRepositoryDto
+		});
 
-		if (error) throw error;
-		return data;
+		return result.records[0].get('r').properties;
 	}
 
 	async findAll(userId: string): Promise<Repository[]> {
-		const { data, error } = await this.supabaseService.client
-			.from('repositories')
-			.select('*')
-			.eq('user_id', userId)
-			.order('updated_at', { ascending: false });
+		const result = await this.neo4jService.read(`
+			MATCH (u:User {id: $userId})-[:OWNS]->(r:Repository)
+			RETURN r
+			ORDER BY r.updated_at DESC
+		`, { userId });
 
-		if (error) throw error;
-		return data;
+		interface RecordType {
+			get: (key: 'r') => { properties: Repository };
+		}
+
+		return result.records.map((record: RecordType) => record.get('r').properties);
 	}
 
 	async update(userId: string, id: string, updateRepositoryDto: UpdateRepositoryDto): Promise<Repository> {
-		const { data, error } = await this.supabaseService.client
-			.from('repositories')
-			.update(updateRepositoryDto)
-			.eq('id', id)
-			.eq('user_id', userId)
-			.select()
-			.single();
+		const result = await this.neo4jService.write(`
+			MATCH (u:User {id: $userId})-[:OWNS]->(r:Repository {id: $id})
+			SET r += $updates, r.updated_at = datetime()
+			RETURN r
+		`, {
+			userId,
+			id,
+			updates: updateRepositoryDto
+		});
 
-		if (error) throw error;
-		return data;
+		if (result.records.length === 0) {
+			throw new Error('Repository not found');
+		}
+
+		return result.records[0].get('r').properties;
 	}
 
 	async remove(userId: string, id: string): Promise<void> {
-		const { error } = await this.supabaseService.client
-			.from('repositories')
-			.delete()
-			.eq('id', id)
-			.eq('user_id', userId);
+		const result = await this.neo4jService.write(`
+			MATCH (u:User {id: $userId})-[:OWNS]->(r:Repository {id: $id})
+			DETACH DELETE r
+		`, { userId, id });
 
-		if (error) throw error;
+		if (result.summary.counters.updates().nodesDeleted === 0) {
+			throw new Error('Repository not found');
+		}
 	}
 }

@@ -22,12 +22,12 @@ export class UserController {
 
   @Get(":id")
   @RequirePermissions("users:read")
-  findOne(@Param("id") id: number) {
+  findOne(@Param("id") id: string) {
     return this.userService.findUserById(id);
   }
 
   @Post(":id")
   update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.updateUser(Number(id), updateUserDto);
+    return this.userService.updateUser(id, updateUserDto);
   }
 }
