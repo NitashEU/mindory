@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node"],
     "target": "ES2019",
     "module": "commonjs",
     "strict": true,
@@ -17,7 +18,9 @@
     },
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "noImplicitAny": true,
+    "strictNullChecks": true
   },
   "include": [
     "src/**/*.ts"
@@ -27,3 +30,4 @@
     "dist"
   ]
 }
+

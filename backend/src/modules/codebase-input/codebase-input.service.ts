@@ -4,6 +4,7 @@ import * as unzipper from 'unzipper';
 import * as walk from 'ignore-walk';
 import Lua from '@tree-sitter-grammars/tree-sitter-lua';
 import Parser from 'tree-sitter';
+import { CodeProcessingService } from '@/modules/code-processing/code-processing.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { simpleGit } from 'simple-git';
 import { VoyageService } from '@/common/services/voyage.service';
@@ -16,7 +17,10 @@ interface CodebaseFilterOptions {
 
 @Injectable()
 export class CodebaseInputService {
-  constructor(private readonly voyageService: VoyageService) {}
+  constructor(
+    private readonly voyageService: VoyageService,
+    private readonly codeProcessingService: CodeProcessingService
+  ) {}
 
   async processPathInput(
     inputPath: string,
@@ -32,29 +36,62 @@ export class CodebaseInputService {
 
     const files = this.getFilesRecursive(inputPath);
     const filteredFiles = this.applyFilters(files, options);
-    const { parsedFiles, repoMap } = this.parseFiles(filteredFiles, inputPath);
+    const { parsedFiles, repoMap } = await this.parseFiles(
+      filteredFiles,
+      inputPath
+    );
     const cleanedRepoMap = this.cleanRepoMap(repoMap);
 
-    return { name: "Path Input", files: parsedFiles, repoMap: cleanedRepoMap };
+    return { name: "", files: [], repoMap: cleanedRepoMap };
   }
 
   async processRepoInput(
     repoUrl: string,
-    options?: CodebaseFilterOptions
-  ): Promise<{ name: string; files: string[] }> {
+    options?: CodebaseFilterOptions & { vectorize?: boolean }
+  ): Promise<{ name: string; files: string[]; vectorized?: boolean }> {
     const tempDir = path.join(__dirname, "tempRepo");
     const git = simpleGit();
 
-    // Clone the repository to a temporary directory
-    await git.clone(repoUrl, tempDir);
+    try {
+      // Clone the repository to a temporary directory
+      await git.clone(repoUrl, tempDir);
 
-    const files = this.getFilesRecursive(tempDir);
-    const filteredFiles = this.applyFilters(files, options);
+      // Change working directory and fetch latest changes
+      git.cwd(tempDir);
+      await git.fetch();
 
-    // Clean up the temporary directory
-    fs.rmdirSync(tempDir, { recursive: true });
+      const files = this.getFilesRecursive(tempDir);
+      const filteredFiles = this.applyFilters(files, options);
 
-    return { name: "Repo Input", files: filteredFiles };
+      let vectorized = false;
+      if (options?.vectorize) {
+        try {
+          const fileObjects = filteredFiles.map((filePath) => ({
+            path: filePath,
+            content: fs.readFileSync(path.join(tempDir, filePath), "utf-8"),
+          }));
+
+          await this.codeProcessingService.processRepository(fileObjects);
+          vectorized = true;
+        } catch (vectorizeError) {
+          console.error("Error during vectorization:", vectorizeError);
+          // Continue without vectorization if it fails
+        }
+      }
+
+      return {
+        name: "Repo Input",
+        files: filteredFiles,
+        vectorized,
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      // Clean up the temporary directory
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir, { recursive: true });
+      }
+    }
   }
 
   async processZipInput(
@@ -144,62 +181,101 @@ export class CodebaseInputService {
     });
   }
 
-  private parseFiles(
+  private async parseFiles(
     files: string[],
     inputPath: string
-  ): {
+  ): Promise<{
     parsedFiles: { file: string; tree: Parser.Tree }[];
     repoMap: { [key: string]: { name: string; text: string }[] };
-  } {
+  }> {
     const parser = new Parser();
     parser.setLanguage(Lua as unknown as Parser.Language);
     const query = new Parser.Query(
       Lua as unknown as Parser.Language,
       `(function_declaration
-  name: [
-    (identifier) @name
-    (dot_index_expression
-      field: (identifier) @name)
-  ]) @definition.function
+name: [
+(identifier) @name
+(dot_index_expression
+field: (identifier) @name)
+]) @definition.function
 
 (function_declaration
-  name: (method_index_expression
-    method: (identifier) @name)) @definition.method
+name: (method_index_expression
+method: (identifier) @name)) @definition.method
 
 (assignment_statement
-  (variable_list .
-    name: [
-      (identifier) @name
-      (dot_index_expression
-        field: (identifier) @name)
-    ])
-  (expression_list .
-    value: (function_definition))) @definition.as
+(variable_list .
+name: [
+(identifier) @name
+(dot_index_expression
+field: (identifier) @name)
+])
+(expression_list .
+value: (function_definition))) @definition.as
 
 (table_constructor
   (field
-    name: (identifier) @name
-    value: (function_definition))) @definition.table
+    name: (identifier) @definition.function
+    value: (function_definition
+      )
+  )
+)
 
 (function_call
-  name: [
-    (identifier) @name
-    (dot_index_expression
-      field: (identifier) @name)
-    (method_index_expression
-      method: (identifier) @name)
-  ]) @reference.call`
+name: [
+(identifier) @name
+(dot_index_expression
+field: (identifier) @name)
+(method_index_expression
+method: (identifier) @name)
+]) @reference.call
+
+(assignment_statement
+  (expression_list
+    (table_constructor)
+  )
+) @definition.table-assignment`
     );
 
     const parsedFiles: { file: string; tree: Parser.Tree }[] = [];
     const repoMap: { [key: string]: { name: string; text: string }[] } = {};
 
     for (const file of files) {
-      if (!file.endsWith(".lua")) continue;
+      if (!file.endsWith(".lua")) {
+        continue;
+      }
 
       repoMap[file] = [];
-      const content = fs.readFileSync(path.join(inputPath, file), "utf8");
+      let content = fs.readFileSync(path.join(inputPath, file), "utf8");
+      if (file.includes("_api/common")) {
+        const lines = content.split("\n");
+        let currentClass = "";
+        const newLines = [];
+        for (let line of lines) {
+          if (line.startsWith("---@class")) {
+            currentClass = line.split(" ")[1];
+          } else if (line.startsWith("---@field")) {
+            line = line.replace("---@field", "");
+            line = line.replace("public", "").trim();
+            if (line.includes("fun")) {
+              newLines.push(
+                `function ${currentClass}:${line.replace(" fun", "")} end`
+              );
+            } else {
+              console.log(line);
+              newLines.push(
+                `local ${currentClass}.${line.split(" ")[0]} = "${
+                  line.split(" ")[1]
+                }"`
+              );
+            }
+          }
+        }
+        content += newLines.join("\n");
+      }
+
       const tree = parser.parse(content);
+
       const captures = query.captures(tree.rootNode);
 
       for (const capture of captures) {
@@ -210,6 +286,88 @@ export class CodebaseInputService {
     }
 
     return { parsedFiles, repoMap };
+  }
+
+  async createEmptyLuaCodeCursor(luaCode: string): Promise<any[]> {
+    const parser = new Parser();
+    parser.setLanguage(Lua as unknown as Parser.Language);
+
+    const tree = parser.parse(luaCode);
+    const cursor = tree.walk(); // Get a TreeCursor
+
+    const captures: any[] = []; // Array to store capture objects
+
+    // Start tree traversal from the root node
+    let reachedRoot = false;
+
+    while (true) {
+      if (!reachedRoot) {
+        reachedRoot = true; // Avoid processing root node's text directly
+      } else {
+        console.log(
+          `Cursor visiting node type: ${cursor.nodeType}, isNamed: ${cursor.nodeIsNamed}`
+        ); // Log node type
+
+        if (cursor.nodeType === "program") {
+          // Skip program node itself, process children in loop
+        } else if (cursor.nodeIsNamed) {
+          let captureName: string | undefined;
+
+          switch (cursor.nodeType) {
+            case "function_declaration":
+              captureName = "definition.function";
+              break;
+            case "assignment_statement":
+              captureName = "definition.as";
+              break;
+            case "table_constructor":
+              captureName = "definition.table";
+              break;
+            case "function_call":
+              captureName = "reference.call";
+              break;
+            case "identifier":
+              captureName = "name";
+              break;
+            default:
+              captureName = cursor.nodeType;
+          }
+
+          if (captureName) {
+            console.log(`Capturing node: ${cursor.nodeType} as ${captureName}`);
+            captures.push({
+              name: captureName,
+              text: cursor.nodeText,
+            });
+          }
+        }
+      }
+
+      // Try to go to first child, if no children or already visited children, go to next sibling, if no siblings go to parent's sibling
+      if (cursor.gotoFirstChild()) {
+        continue; // Go deeper into the tree
+      }
+
+      // No children, try to go to next sibling
+      if (cursor.gotoNextSibling()) {
+        continue; // Move to next sibling at the same level
+      }
+
+      // No children and no next sibling, go up to parent and try next sibling from there
+      let wentUp = false;
+      while (cursor.gotoParent()) {
+        if (cursor.gotoNextSibling()) {
+          wentUp = true;
+          break; // Found a sibling of a parent, continue from there
+        }
+      }
+      if (!wentUp) {
+        break; // No more siblings or parents with siblings, traversal is complete
+      }
+    }
+
+    console.log("Cursor captures array:", JSON.stringify(captures, null, 2));
+    return captures;
   }
 
   private cleanRepoMap(repoMap: {

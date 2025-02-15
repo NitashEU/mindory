@@ -58,6 +58,7 @@ export class CodebaseInputController {
         includeDocs: body.includeDocs,
         codeFilters: body.codeFilters,
         docsFilters: body.docsFilters,
+        vectorize: body.vectorize,
       };
       const result = await this.codebaseInputService.processRepoInput(
         body.repoUrl,

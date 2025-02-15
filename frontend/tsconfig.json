@@ -11,7 +11,9 @@
     "baseUrl": "./src",
     "paths": {
       "@/*": ["*"]
-    }
+    },
+    "noImplicitAny": true,
+    "strictNullChecks": true
   },
   "include": ["src/**/*.ts", "src/**/*.vue"],
   "exclude": ["node_modules", "dist"]

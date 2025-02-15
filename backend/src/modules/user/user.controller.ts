@@ -1,15 +1,12 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post
-  } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UserService } from './user.service';
+import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { JwtAuthGuard } from "@/common/guards/jwt-auth.guard";
+import { RequirePermissions } from "@/common/decorators/permissions.decorator";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { UserService } from "./user.service";
 
 @Controller("users")
+@UseGuards(JwtAuthGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -24,8 +21,9 @@ export class UserController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.userService.findUserById(Number(id));
+  @RequirePermissions("users:read")
+  findOne(@Param("id") id: number) {
+    return this.userService.findUserById(id);
   }
 
   @Post(":id")
