@@ -27,12 +27,17 @@ export class CodebaseInputController {
   @ApiResponse({ status: 400, description: "Bad request" })
   async inputPath(@Body() body: PathInputDto) {
     try {
-      return await this.codebaseInputService.processPathInput(body.inputPath, {
-        includeDocs: body.includeDocs,
-        codeFilters: body.codeFilters,
-        docsFilters: body.docsFilters,
-      });
+      const result = await this.codebaseInputService.processPathInput(
+        body.inputPath,
+        {
+          includeDocs: body.includeDocs,
+          codeFilters: body.codeFilters,
+          docsFilters: body.docsFilters,
+        }
+      );
+      return result;
     } catch (error: any) {
+      console.error("Error processing path input:", error);
       throw new HttpException(
         error?.message || "Error processing path input",
         HttpStatus.BAD_REQUEST
@@ -60,6 +65,7 @@ export class CodebaseInputController {
       );
       return result;
     } catch (error: any) {
+      console.error("Error processing repository input:", error);
       throw new HttpException(
         error?.message || "Error processing repository input",
         HttpStatus.BAD_REQUEST
@@ -84,6 +90,7 @@ export class CodebaseInputController {
       );
       return result;
     } catch (error: any) {
+      console.error("Error processing zip input:", error);
       throw new HttpException(
         error?.message || "Error processing zip input",
         HttpStatus.BAD_REQUEST

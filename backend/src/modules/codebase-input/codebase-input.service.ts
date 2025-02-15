@@ -1,86 +1,59 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as unzipper from 'unzipper';
 import * as walk from 'ignore-walk';
-import { Injectable } from '@nestjs/common';
-import Parser from 'tree-sitter';
 import Lua from '@tree-sitter-grammars/tree-sitter-lua';
+import Parser from 'tree-sitter';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { simpleGit } from 'simple-git';
 import { VoyageService } from '@/common/services/voyage.service';
 
-// Define filtering options for codebase inputs
 interface CodebaseFilterOptions {
   includeDocs?: boolean;
   codeFilters?: string[];
   docsFilters?: string[];
 }
 
-// Note: For real implementations, consider using proper async methods and external packages
-// such as "simple-git" for repository operations and "adm-zip" or similar for ZIP handling.
-
 @Injectable()
 export class CodebaseInputService {
-  constructor(
-    private voyageService: VoyageService,
-  ) { }
+  constructor(private readonly voyageService: VoyageService) {}
+
   async processPathInput(
     inputPath: string,
     options?: CodebaseFilterOptions
-  ): Promise<{ name: string; files: { file: string; tree: Parser.Tree }[] }> {
+  ): Promise<{
+    name: string;
+    files: { file: string; tree: Parser.Tree }[];
+    repoMap: { [key: string]: { name: string; text: string }[] };
+  }> {
     if (!fs.existsSync(inputPath)) {
-      throw new Error("Directory not found");
+      throw new NotFoundException(`Directory not found: ${inputPath}`);
     }
+
     const files = this.getFilesRecursive(inputPath);
     const filteredFiles = this.applyFilters(files, options);
-    const parser = new Parser();
-    parser.setLanguage(Lua as unknown as Parser.Language);
+    const { parsedFiles, repoMap } = this.parseFiles(filteredFiles, inputPath);
+    const cleanedRepoMap = this.cleanRepoMap(repoMap);
 
-    const parsedFiles: { file: string; tree: Parser.Tree }[] = [];
-    const nodeTypes = ["assignment_statement", "function_declaration"];
-    for (const file of filteredFiles) {
-
-      if (!file.endsWith(".lua")) continue;
-      const content = fs.readFileSync(path.join(inputPath, file), 'utf8')
-      const tree = parser.parse(content);
-      const snippets = []
-      const cursor = tree.walk();
-      while (cursor.gotoFirstChild()) {
-        if (nodeTypes.includes(cursor.nodeType)) {
-          snippets.push(cursor.currentNode.text)
-        }
-        while (cursor.gotoNextSibling()) {
-          if (nodeTypes.includes(cursor.nodeType)) {
-            snippets.push(cursor.currentNode.text)
-          }
-        }
-      }
-      if (snippets.length > 0) {
-        console.log(snippets)
-        const maxBatchSize = 120;
-        const batches = [];
-        for (let i = 0; i < snippets.length; i += maxBatchSize) {
-          batches.push(snippets.slice(i, i + maxBatchSize));
-        }
-        for (const batch of batches) {
-          const b = await this.voyageService.generateEmbeddings(batch, "voyage-code-3")
-          console.log(b)
-        }
-      }
-      parsedFiles.push({ file, tree });
-      // Process the tree here
-    }
-    return { name: "Path Input", files: parsedFiles };
+    return { name: "Path Input", files: parsedFiles, repoMap: cleanedRepoMap };
   }
 
   async processRepoInput(
     repoUrl: string,
     options?: CodebaseFilterOptions
   ): Promise<{ name: string; files: string[] }> {
-    // Pseudo-code:
-    // 1. Clone the repository to a temporary directory.
-    // 2. Read all files from the cloned directory.
-    // 3. Clean up (delete temporary directory).
-    // For now, simulate the behavior.
-    const files = ["repoFile1.js", "repoFile2.ts"]; // Simulated file list
+    const tempDir = path.join(__dirname, "tempRepo");
+    const git = simpleGit();
+
+    // Clone the repository to a temporary directory
+    await git.clone(repoUrl, tempDir);
+
+    const files = this.getFilesRecursive(tempDir);
     const filteredFiles = this.applyFilters(files, options);
+
+    // Clean up the temporary directory
+    fs.rmdirSync(tempDir, { recursive: true });
+
     return { name: "Repo Input", files: filteredFiles };
   }
 
@@ -88,13 +61,23 @@ export class CodebaseInputService {
     zipFilePath: string,
     options?: CodebaseFilterOptions
   ): Promise<{ name: string; files: string[] }> {
-    // Pseudo-code:
-    // 1. Unzip the file to a temporary directory.
-    // 2. Read all files from the unzipped directory.
-    // 3. Clean up (delete temporary directory).
-    // For now, simulate the behavior.
-    const files = ["unzippedFile1.js", "unzippedFile2.ts"]; // Simulated file list
+    const tempDir = path.join(__dirname, "tempZip");
+
+    // Create a temporary directory for unzipping
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    // Unzip the file to the temporary directory
+    await fs
+      .createReadStream(zipFilePath)
+      .pipe(unzipper.Extract({ path: tempDir }))
+      .promise();
+
+    const files = this.getFilesRecursive(tempDir);
     const filteredFiles = this.applyFilters(files, options);
+
+    // Clean up the temporary directory
+    fs.rmdirSync(tempDir, { recursive: true });
+
     return { name: "Zip Input", files: filteredFiles };
   }
 
@@ -109,7 +92,7 @@ export class CodebaseInputService {
     files: string[],
     options?: CodebaseFilterOptions
   ): string[] {
-    const includeDocs: boolean = options?.includeDocs !== false; // default is true
+    const includeDocs: boolean = options?.includeDocs !== false;
     const codeFilters: string[] = options?.codeFilters || [];
     const docsFilters: string[] = options?.docsFilters || [];
     const docExtensions: string[] = [
@@ -135,7 +118,6 @@ export class CodebaseInputService {
     ];
 
     return files.filter((file) => {
-      // Ignore .git, node_modules, etc.
       if (file.includes(".git") || file.includes("node_modules")) {
         return false;
       }
@@ -160,5 +142,109 @@ export class CodebaseInputService {
       }
       return true;
     });
+  }
+
+  private parseFiles(
+    files: string[],
+    inputPath: string
+  ): {
+    parsedFiles: { file: string; tree: Parser.Tree }[];
+    repoMap: { [key: string]: { name: string; text: string }[] };
+  } {
+    const parser = new Parser();
+    parser.setLanguage(Lua as unknown as Parser.Language);
+    const query = new Parser.Query(
+      Lua as unknown as Parser.Language,
+      `(function_declaration
+  name: [
+    (identifier) @name
+    (dot_index_expression
+      field: (identifier) @name)
+  ]) @definition.function
+
+(function_declaration
+  name: (method_index_expression
+    method: (identifier) @name)) @definition.method
+
+(assignment_statement
+  (variable_list .
+    name: [
+      (identifier) @name
+      (dot_index_expression
+        field: (identifier) @name)
+    ])
+  (expression_list .
+    value: (function_definition))) @definition.as
+
+(table_constructor
+  (field
+    name: (identifier) @name
+    value: (function_definition))) @definition.table
+
+(function_call
+  name: [
+    (identifier) @name
+    (dot_index_expression
+      field: (identifier) @name)
+    (method_index_expression
+      method: (identifier) @name)
+  ]) @reference.call`
+    );
+
+    const parsedFiles: { file: string; tree: Parser.Tree }[] = [];
+    const repoMap: { [key: string]: { name: string; text: string }[] } = {};
+
+    for (const file of files) {
+      if (!file.endsWith(".lua")) continue;
+
+      repoMap[file] = [];
+      const content = fs.readFileSync(path.join(inputPath, file), "utf8");
+      const tree = parser.parse(content);
+      const captures = query.captures(tree.rootNode);
+
+      for (const capture of captures) {
+        repoMap[file].push({ name: capture.name, text: capture.node.text });
+      }
+
+      parsedFiles.push({ file, tree });
+    }
+
+    return { parsedFiles, repoMap };
+  }
+
+  private cleanRepoMap(repoMap: {
+    [key: string]: { name: string; text: string }[];
+  }): { [key: string]: { name: string; text: string }[] } {
+    const used = new Set<string>([
+      "main.lua",
+      "_api/core.lua",
+      "_api/game_object.lua",
+      "_api/menu.lua",
+    ]);
+
+    for (const file in repoMap) {
+      for (const { name, text } of repoMap[file]) {
+        if (name !== "reference.call" || !text.startsWith("require(")) continue;
+
+        const requireExpression = text
+          .replace("common/", "_api/common/")
+          .slice(1)
+          .slice(8, -2)
+          .replace('require("', "")
+          .replace('")', "");
+
+        used.add(`${requireExpression}.lua`);
+      }
+    }
+
+    const cleanedRepoMap: { [key: string]: { name: string; text: string }[] } =
+      {};
+    for (const file in repoMap) {
+      if (used.has(file)) {
+        cleanedRepoMap[file] = repoMap[file];
+      }
+    }
+
+    return cleanedRepoMap;
   }
 }
