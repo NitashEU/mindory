@@ -11,7 +11,11 @@ async function bootstrap() {
   app.enableCors();
 
   // Add validation pipe and exception filter
-  app.useGlobalPipes();
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }));
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Swagger setup

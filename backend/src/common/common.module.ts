@@ -5,11 +5,12 @@ import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import supabaseConfig from '../config/supabase.config';
 import neo4jConfig from '../config/neo4j.config';
+import lancedbConfig from '../config/lancedb.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      load: [supabaseConfig, neo4jConfig],
+      load: [supabaseConfig, neo4jConfig, lancedbConfig],
       isGlobal: true,
     }),
   ],
@@ -27,4 +28,5 @@ import neo4jConfig from '../config/neo4j.config';
   ],
 })
 export class CommonModule {}
+
 

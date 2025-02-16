@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import * as Joi from 'joi';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
@@ -15,6 +16,9 @@ import neo4jConfig from './config/neo4j.config';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [supabaseConfig, lancedbConfig, neo4jConfig],
+      validationSchema: Joi.object({
+        LANCEDB_URI: Joi.string().default('./data/lancedb'),
+      }),
     }),
     CommonModule,
     DatabaseModule,

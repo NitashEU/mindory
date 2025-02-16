@@ -1,14 +1,12 @@
+import { Injectable, Logger } from "@nestjs/common";
+import { Neo4jService } from "@/database/neo4j.service";
+import { LanceService } from "@/database/lance.service";
+import { VoyageService } from "@/common/services";
+import { SearchResult } from "./interfaces/search-result.interface";
 import Lua from "@tree-sitter-grammars/tree-sitter-lua";
 import Parser from "tree-sitter";
-import { Injectable, Logger } from "@nestjs/common";
-import { SearchResult } from "./interfaces/search-result.interface";
-import { Neo4jService } from "@/database/neo4j.service";
-import { VoyageService } from "@/common/services";
-
-
 
 interface CodeEntity {
-
   type: "function" | "class" | "method" | "table";
   name: string;
   content: string;
@@ -26,16 +24,14 @@ export class CodeProcessingService {
 
   constructor(
     private readonly voyageService: VoyageService,
-    private readonly neo4jService: Neo4jService
+    private readonly neo4jService: Neo4jService,
+    private readonly lanceService: LanceService
   ) {
-
     this.parser = new Parser();
-    this.parser.setLanguage(Lua as unknown as Parser.Language);
+    this.parser.setLanguage(Lua as any);
   }
 
-  async processRepository(
-    files: { path: string; content: string }[]
-  ): Promise<void> {
+  async processRepository(files: { path: string; content: string }[]): Promise<void> {
     try {
       const entities: CodeEntity[] = [];
 
@@ -45,42 +41,46 @@ export class CodeProcessingService {
         const fileEntities = await this.parseFile(file.path, file.content);
         entities.push(...fileEntities);
 
-        // Generate embeddings for entities
         const embeddings = await this.voyageService.generateEmbeddings(
           fileEntities.map((e) => e.content),
           "voyage-code-3"
         );
 
-        // Attach embeddings to entities
         for (let i = 0; i < fileEntities.length; i++) {
           fileEntities[i].vector = embeddings.data![i].embedding;
         }
       }
 
-      await Promise.all([
-        this.storeInNeo4j(entities),
-      ]);
+      await this.storeEmbeddings(entities);
     } catch (error) {
-      this.logger.error(
-        `Failed to process repository: ${(error as any).message}`
-      );
+      this.logger.error(`Failed to process repository: ${(error as any).message}`);
       throw error;
     }
   }
 
-  private async storeInNeo4j(entities: CodeEntity[]): Promise<void> {
+  private async storeEmbeddings(entities: CodeEntity[]): Promise<void> {
     try {
       await this.neo4jService.createCodeEntityGraph(entities);
+
+      const lanceData = entities.map(entity => ({
+        vector: entity.vector!,
+        type: entity.type,
+        name: entity.name,
+        content: entity.content,
+        filePath: entity.filePath,
+        startLine: entity.startLine,
+        endLine: entity.endLine,
+        dependencies: entity.dependencies
+      }));
+      await this.lanceService.storeEmbeddings('code-entities', lanceData);
     } catch (error) {
-      this.logger.error(`Failed to store in Neo4j: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.error(`Failed to store embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
 
-  private async parseFile(
-    filePath: string,
-    content: string
-  ): Promise<CodeEntity[]> {
+
+  private async parseFile(filePath: string, content: string): Promise<CodeEntity[]> {
     try {
       const tree = this.parser.parse(content);
       const entities: CodeEntity[] = [];
@@ -104,7 +104,7 @@ export class CodeProcessingService {
             filePath,
             startLine: node.startPosition.row,
             endLine: node.endPosition.row,
-            dependencies: [] as string[],
+            dependencies: [],
           };
         } else if (name === "reference.call" && currentEntity) {
           currentEntity.dependencies!.push(this.extractDependencyName(node));
@@ -117,14 +117,12 @@ export class CodeProcessingService {
 
       return entities;
     } catch (error) {
-      this.logger.error(
-        `Failed to parse file ${filePath}: ${(error as any).message}`
-      );
+      this.logger.error(`Failed to parse file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
 
-  private createTreeSitterQuery(): Parser.Query {
+  private createTreeSitterQuery(): any {
     const queryString = `
       (function_declaration
         name: [
@@ -148,7 +146,7 @@ export class CodeProcessingService {
           (method_index_expression method: (identifier) @name)
         ]) @reference.call
     `;
-    return new Parser.Query(Lua as unknown as Parser.Language, queryString);
+    return new Parser.Query(Lua as any, queryString);
   }
 
   private determineEntityType(definitionType: string): CodeEntity["type"] {
@@ -161,14 +159,74 @@ export class CodeProcessingService {
   }
 
   private extractNodeName(node: Parser.SyntaxNode): string {
-    // Extract name based on node type and structure
     const nameNode = node.childForFieldName("name");
     return nameNode ? nameNode.text : "anonymous";
   }
 
   private extractDependencyName(node: Parser.SyntaxNode): string {
-    // Extract dependency name from function call node
     return node.text.split(".")[0];
+  }
+
+  private async searchNeo4j(queryVector: number[], limit: number): Promise<SearchResult[]> {
+    const cypherQuery = `
+      WITH $queryVector AS queryVector
+      CALL db.index.vector.queryNodes('code-entity-embeddings', $limit, queryVector)
+      YIELD node AS entity, score
+      OPTIONAL MATCH (entity)-[:DEPENDS_ON]->(dependency)
+      RETURN entity, score, collect(dependency) AS dependencies
+    `;
+
+    const result = await this.neo4jService.read(cypherQuery, { queryVector, limit });
+
+    return result.records.map((record: Record<string, any>) => {
+      const entity = record.get('entity').properties;
+      const score = record.get('score');
+      const dependencies = record.get('dependencies').map((dep: { properties: { name: string } }) => dep.properties.name);
+
+      return {
+        entity: {
+          type: entity.type,
+          name: entity.name,
+          content: entity.content,
+          filePath: entity.filePath,
+          startLine: entity.startLine,
+          endLine: entity.endLine,
+          dependencies: entity.dependencies,
+        },
+        score,
+        dependencies,
+      };
+    });
+  }
+
+  private mergeSearchResults(neo4jResults: SearchResult[], lanceResults: any[]): SearchResult[] {
+    const formattedLanceResults = lanceResults.map(result => ({
+      entity: {
+        type: result.type,
+        name: result.name,
+        content: result.content,
+        filePath: result.filePath,
+        startLine: result.startLine,
+        endLine: result.endLine,
+        dependencies: result.dependencies
+      },
+      score: result.score,
+      dependencies: result.dependencies
+    }));
+
+    const allResults = [...neo4jResults, ...formattedLanceResults];
+    const uniqueResults = new Map();
+
+    allResults.forEach(result => {
+      const key = result.entity.name;
+      if (!uniqueResults.has(key) || uniqueResults.get(key).score < result.score) {
+        uniqueResults.set(key, result);
+      }
+    });
+
+    return Array.from(uniqueResults.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, Math.max(neo4jResults.length, lanceResults.length));
   }
 
   async searchCode(query: string, limit: number = 5): Promise<SearchResult[]> {
@@ -179,45 +237,25 @@ export class CodeProcessingService {
       );
       const queryVector = embeddings.data![0].embedding;
 
-      const cypherQuery = `
-        WITH $queryVector AS queryVector
-        CALL db.index.vector.queryNodes('code-entity-embeddings', $limit, queryVector)
-        YIELD node AS entity, score
-        OPTIONAL MATCH (entity)-[:DEPENDS_ON]->(dependency)
-        RETURN entity, score, collect(dependency) AS dependencies
-      `;
+      if (!queryVector) {
+        throw new Error('Failed to generate embeddings for query');
+      }
 
-      const result = await this.neo4jService.read(cypherQuery, {
-        queryVector,
-        limit,
-      });
+      const [neo4jResults, lanceResults] = await Promise.all([
+        this.searchNeo4j(queryVector, limit),
+        this.lanceService.search('code-entities', queryVector, limit)
+      ]);
 
-        const enrichedResults = result.records.map((record: Record<string, any>) => {
-        const entity = record.get('entity').properties;
-        const score = record.get('score');
-        const dependencies = record.get('dependencies').map((dep: { properties: { name: string } }) => dep.properties.name);
+      // Ensure lanceResults is an array
+      const lanceResultsArray = Array.isArray(lanceResults) ? lanceResults : [];
 
-        return {
-          entity: {
-            type: entity.type,
-            name: entity.name,
-            content: entity.content,
-            filePath: entity.filePath,
-            startLine: entity.startLine,
-            endLine: entity.endLine,
-            dependencies: entity.dependencies,
-          },
-          score: score,
-          dependencies: dependencies,
-        };
-      }) as SearchResult[];
-
-      return enrichedResults;
+      return this.mergeSearchResults(neo4jResults, lanceResultsArray);
     } catch (error) {
       this.logger.error(`Failed to search code: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
 }
+
 
 
