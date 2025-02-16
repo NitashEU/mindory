@@ -41,15 +41,20 @@ export class CodeProcessingService {
         const fileEntities = await this.parseFile(file.path, file.content);
         entities.push(...fileEntities);
 
-        const embeddings = await this.voyageService.generateEmbeddings(
+        const embeddingsResult = await this.voyageService.generateEmbeddings(
           fileEntities.map((e) => e.content),
           "voyage-code-3"
         );
 
+        const embeddings = embeddingsResult.data!.map(item => item.embedding);
+
+        // Rerank the embeddings
+        const rerankedEmbeddings = await this.rerankEmbeddings(fileEntities, embeddings);
+
         for (let i = 0; i < fileEntities.length; i++) {
-          fileEntities[i].vector = embeddings.data![i].embedding;
+          fileEntities[i].vector = rerankedEmbeddings[i];
         }
-      }
+        }
 
       await this.storeEmbeddings(entities);
     } catch (error) {
@@ -254,8 +259,37 @@ export class CodeProcessingService {
       this.logger.error(`Failed to search code: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
+    }
+
+    private async rerankEmbeddings(entities: CodeEntity[], embeddings: number[][]): Promise<number[][]> {
+      try {
+      // Create context for reranking using entity information
+      const contexts = entities.map(entity => ({
+        content: entity.content,
+        metadata: {
+        type: entity.type,
+        name: entity.name,
+        dependencies: entity.dependencies
+        }
+      }));
+
+      // Use Voyage AI to rerank embeddings based on context
+      const rerankedResult = await this.voyageService.rerank(
+        contexts,
+        embeddings,
+        {
+        model: "rerank-2",
+        strategy: "semantic_similarity",
+        }
+      );
+
+      return rerankedResult.data!.map(item => item.embedding);
+      } catch (error) {
+      this.logger.error(`Failed to rerank embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return embeddings; // Fallback to original embeddings if reranking fails
+      }
+    }
   }
-}
 
 
 
