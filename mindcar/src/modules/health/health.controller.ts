@@ -1,29 +1,43 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post
-  } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { HealthCheckResponse, ConfigResponse, VersionResponse } from './interfaces/health.interface';
 import { HealthService } from './health.service';
 
-@Controller('api')
+@ApiTags('Health')
+@Controller()
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
-  @Get('health')
-  health() {
+  @Get('api/health')
+  @ApiOperation({ summary: 'Health check endpoint' })
+  @ApiResponse({ 
+    status: 200,
+    description: 'Health check successful',
+    type: HealthCheckResponse
+  })
+  async health(): Promise<HealthCheckResponse> {
     return this.healthService.checkHealth();
   }
 
-  @Get('version')
-  version() {
-    return this.healthService.checkHealth();
+  @Get('api/config')
+  @ApiOperation({ summary: 'Get configuration' })
+  @ApiResponse({
+    status: 200,
+    description: 'Configuration retrieved successfully',
+    type: ConfigResponse
+  })
+  async getConfig(): Promise<ConfigResponse> {
+    return this.healthService.getConfig();
   }
 
-  @Post('new_exchange')
-  new_exchange(@Body() body: any) {
-    return {
-      exchange_id: '1',
-    };
+  @Get('api/version')
+  @ApiOperation({ summary: 'Get version information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Version information retrieved successfully',
+    type: VersionResponse
+  })
+  async getVersion(): Promise<VersionResponse> {
+    return this.healthService.getVersion();
   }
 }

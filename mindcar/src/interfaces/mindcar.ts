@@ -105,30 +105,30 @@ export type SideCarAgentEvent =
   | SideCarAgentUIEvent
   | SideCarAgentDoneEvent;
 
-interface SideCarAgentKeepAliveEvent {
+export interface SideCarAgentKeepAliveEvent {
   keep_alive: 'alive';
 }
 
-interface SideCarAgentDoneEvent {
+export interface SideCarAgentDoneEvent {
   done: '[CODESTORY_DONE]';
 }
 
-interface SideCarAgentStartStreamingEvent {
+export interface SideCarAgentStartStreamingEvent {
   session_id: string;
   started: boolean;
 }
 
-interface SideCarAgentUIEvent {
+export interface SideCarAgentUIEvent {
   request_id: string;
   exchange_id: string;
   event: UIEvent;
 }
 
-interface RequestEventProbeFinished {
+export interface RequestEventProbeFinished {
   reply: string;
 }
 
-interface RequestEvents {
+export interface RequestEvents {
   ProbingStart?: {};
   ProbeFinished?: RequestEventProbeFinished;
 }
@@ -147,7 +147,7 @@ export enum ToolParameter {
 
 export type ToolParameterType = `${ToolParameter}`;
 
-interface ToolParameterFoundEvent {
+export interface ToolParameterFoundEvent {
   tool_parameter_input: {
     field_name: ToolParameterType;
     field_content_up_until_now: string;
@@ -165,19 +165,19 @@ type ToolType =
   | 'AttemptCompletion'
   | 'RepoMapGeneration';
 
-interface ToolTypeFoundEvent {
+export interface ToolTypeFoundEvent {
   tool_type: ToolType;
 }
 
-interface ToolThinkingEvent {
+export interface ToolThinkingEvent {
   thinking: string;
 }
 
-interface ToolNotFoundEvent {
+export interface ToolNotFoundEvent {
   full_output: string;
 }
 
-interface ToolTypeErrorEvent {
+export interface ToolTypeErrorEvent {
   error_string: string;
 }
 
@@ -210,16 +210,16 @@ type ToolOutputEvent = {
   ToolOutputResponse: ToolOutputResponseEvent;
 };
 
-interface ToolTypeForOutputEvent {
+export interface ToolTypeForOutputEvent {
   tool_type: ToolType;
 }
 
-interface ToolOutputResponseEvent {
+export interface ToolOutputResponseEvent {
   delta: string;
   answer_up_until_now: string;
 }
 
-interface ToolUseDetectedEvent {
+export interface ToolUseDetectedEvent {
   tool_use_partial_input: ToolInputPartial;
   thinking: string;
 }
@@ -235,36 +235,36 @@ export type ToolInputPartial = {
   AttemptCompletion: AttemptCompletionClientRequest;
 };
 
-interface CodeEditingPartialRequest {
+export interface CodeEditingPartialRequest {
   fs_file_path: string;
   instruction: string;
 }
 
-interface ListFilesInput {
+export interface ListFilesInput {
   directory_path: string;
   recursive: boolean;
 }
 
-interface OpenFileRequestPartial {
+export interface OpenFileRequestPartial {
   fs_file_path: string;
 }
 
-interface WorkspaceDiagnosticsPartial {}
+export interface WorkspaceDiagnosticsPartial {}
 
-interface TerminalInputPartial {
+export interface TerminalInputPartial {
   command: string;
 }
 
-interface AskFollowupQuestionsRequest {
+export interface AskFollowupQuestionsRequest {
   question: string;
 }
 
-interface AttemptCompletionClientRequest {
+export interface AttemptCompletionClientRequest {
   result: string;
   command: string | null;
 }
 
-interface SearchFileContentInputPartial {
+export interface SearchFileContentInputPartial {
   directory_path: string;
   regex_pattern: string;
   file_pattern: string | null;
@@ -281,7 +281,7 @@ type ExchangeMessageEvent = {
 
 type ExecutionExchangeStateEvent = 'Inference' | 'InReview' | 'Cancelled';
 
-interface EditsExchangeEditsState {
+export interface EditsExchangeEditsState {
   edits_state: 'Loading' | 'Cancelled' | 'MarkedComplete' | 'Accepted';
   files: string[];
 }
@@ -292,7 +292,7 @@ type PlanMessageEvent = {
   PlanStepDescriptionUpdate: PlanStepDescriptionUpdateEvent;
 };
 
-interface PlanStepAddEvent {
+export interface PlanStepAddEvent {
   session_id: string;
   exchange_id: string;
   files_to_edit: string[];
@@ -301,7 +301,7 @@ interface PlanStepAddEvent {
   index: number;
 }
 
-interface PlanStepTitleEvent {
+export interface PlanStepTitleEvent {
   session_id: string;
   exchange_id: string;
   files_to_edit: string[];
@@ -309,7 +309,7 @@ interface PlanStepTitleEvent {
   index: number;
 }
 
-interface PlanStepDescriptionUpdateEvent {
+export interface PlanStepDescriptionUpdateEvent {
   session_id: string;
   exchange_id: string;
   files_to_edit: string[];
@@ -318,17 +318,17 @@ interface PlanStepDescriptionUpdateEvent {
   index: number;
 }
 
-interface RegeneratePlanExchangeEvent {
+export interface RegeneratePlanExchangeEvent {
   exchange_id: string;
   session_id: string;
 }
 
-interface FinishedExchangeEvent {
+export interface FinishedExchangeEvent {
   exchange_id: string;
   session_id: string;
 }
 
-interface ChatMessageEvent {
+export interface ChatMessageEvent {
   answer_up_until_now: string;
   delta: string | null;
 }
@@ -345,7 +345,7 @@ enum SearchToolType {
   Keyword = 'Keyword',
 }
 
-interface SearchQuery {
+export interface SearchQuery {
   thinking: string;
   tool: SearchToolType;
   query: string;
@@ -355,23 +355,23 @@ type SearchResultSnippet =
   | { type: 'FileContent'; content: Uint8Array }
   | { type: 'Tag'; tag: string };
 
-interface SearchResult {
+export interface SearchResult {
   path: string;
   thinking: string;
   snippet: SearchResultSnippet;
 }
 
-interface IdentifiedFile {
+export interface IdentifiedFile {
   path: string;
   thinking: string;
 }
 
-interface IdentifyResponse {
+export interface IdentifyResponse {
   items: IdentifiedFile[];
   scratchPad: string;
 }
 
-interface DecideResponse {
+export interface DecideResponse {
   suggestions: string;
   complete: boolean;
 }
@@ -395,7 +395,7 @@ type IterativeSearchEvent =
   | { type: 'LoopCompleted'; iteration: number; duration: Duration }
   | { type: 'SearchCompleted'; duration: Duration };
 
-interface Duration {
+export interface Duration {
   secs: number;
   nanos: number;
 }
@@ -403,12 +403,12 @@ interface Duration {
 // key represents a REASON
 type GroupedReferences = { [key: string]: Location[] };
 
-interface Location {
+export interface Location {
   fs_file_path: string;
   symbol_name: string;
 }
 
-interface UIEvent {
+export interface UIEvent {
   SymbolEvent: SymbolEventRequest;
   ToolEvent: ToolInput;
   CodebaseEvent: SymbolInputEvent;
@@ -423,34 +423,34 @@ interface UIEvent {
   Error: ErrorEvent;
 }
 
-interface ErrorEvent {
+export interface ErrorEvent {
   message: string;
 }
 
-interface TerminalCommandEvent {
+export interface TerminalCommandEvent {
   exchange_id: string;
   session_id: string;
   command: string;
 }
 
-interface SymbolEventSubStepRequest {
+export interface SymbolEventSubStepRequest {
   symbol_identifier: SymbolIdentifier;
   event: SymbolEventSubStep;
 }
 
-interface SymbolEventProbeRequest {
+export interface SymbolEventProbeRequest {
   SubSymbolSelection: {};
   ProbeDeeperSymbol: {};
   ProbeAnswer: string;
 }
 
-interface SymbolEventGoToDefinitionRequest {
+export interface SymbolEventGoToDefinitionRequest {
   fs_file_path: string;
   range: SidecarRequestRange;
   thinking: string;
 }
 
-interface EditedCodeStreamingRequestEvent {
+export interface EditedCodeStreamingRequestEvent {
   Delta: string;
 }
 
@@ -466,7 +466,7 @@ export interface EditedCodeStreamingRequest {
   plan_step_id: string | null;
 }
 
-interface SymbolEventEditRequest {
+export interface SymbolEventEditRequest {
   RangeSelectionForEdit: RangeSelectionForEditRequest;
   InsertCode: InsertCodeForEditRequest;
   EditCode: EditedCodeForEditRequest;
@@ -475,45 +475,45 @@ interface SymbolEventEditRequest {
   ThinkingForEdit: ThinkingForEditRequest;
 }
 
-interface ThinkingForEditRequest {
+export interface ThinkingForEditRequest {
   thinking: string;
   delta: string | null;
 }
 
-interface RangeSelectionForEditRequest {
+export interface RangeSelectionForEditRequest {
   range: SidecarRequestRange;
   fs_file_path: string;
 }
 
-interface InsertCodeForEditRequest {
+export interface InsertCodeForEditRequest {
   range: SidecarRequestRange;
   fs_file_path: string;
 }
 
-interface EditedCodeForEditRequest {
+export interface EditedCodeForEditRequest {
   range: SidecarRequestRange;
   fs_file_path: string;
   new_code: string;
 }
 
-interface CodeCorrectionToolSelection {
+export interface CodeCorrectionToolSelection {
   range: SidecarRequestRange;
   fs_file_path: string;
   tool_use: string;
 }
 
-interface SymbolEventSubStep {
+export interface SymbolEventSubStep {
   Probe?: SymbolEventProbeRequest;
   GoToDefinition?: SymbolEventGoToDefinitionRequest;
   Edit?: SymbolEventEditRequest;
 }
 
-interface SymbolLocation {
+export interface SymbolLocation {
   snippet: Snippet;
   symbol_identifier: SymbolIdentifier;
 }
 
-interface SymbolInputEvent {
+export interface SymbolInputEvent {
   context: UserContext;
   llm: LLMTypeVariant;
   provider: LLMProvider;
@@ -530,25 +530,25 @@ interface SymbolInputEvent {
   swe_bench_long_context_editing?: LLMProperties;
 }
 
-interface LLMProperties {
+export interface LLMProperties {
   llm: LLMTypeVariant;
   provider: LLMProvider;
   api_keys: LLMProviderAPIKeys;
 }
 
-interface ToolProperties {
+export interface ToolProperties {
   swe_bench_test_endpoint?: string;
   swe_bench_code_editing_llm?: LLMProperties;
   swe_bench_reranking_llm?: LLMProperties;
 }
 
-interface SymbolEventRequest {
+export interface SymbolEventRequest {
   symbol: SymbolIdentifier;
   event: SymbolEvent;
   tool_properties: ToolProperties;
 }
 
-interface SymbolEvent {
+export interface SymbolEvent {
   InitialRequest: InitialRequestData;
   AskQuestion: AskQuestionRequest;
   UserFeedback: {};
@@ -558,16 +558,16 @@ interface SymbolEvent {
   Probe: SymbolToProbeRequest;
 }
 
-interface InitialRequestData {
+export interface InitialRequestData {
   original_question: string;
   plan_if_available?: string;
 }
 
-interface AskQuestionRequest {
+export interface AskQuestionRequest {
   question: string;
 }
 
-interface SymbolToEdit {
+export interface SymbolToEdit {
   outline: boolean;
   range: SidecarRequestRange;
   fs_file_path: string;
@@ -576,29 +576,29 @@ interface SymbolToEdit {
   is_new: boolean;
 }
 
-interface InitialSearchSymbols {
+export interface InitialSearchSymbols {
   request_id: string;
   symbols: InitialSearchSymbolInformation[];
 }
 
-interface OpenFileRequestFrameworkEvent {
+export interface OpenFileRequestFrameworkEvent {
   fs_file_path: string;
 }
 
 type FoundReference = Record<string, number>;
 
-interface FrameworkReferencesUsed {
+export interface FrameworkReferencesUsed {
   exchange_id: String;
   variables: ConversationMessageVariableInformation[];
 }
 
-interface RelevantReference {
+export interface RelevantReference {
   fs_file_path: string;
   symbol_name: string;
   reason: string;
 }
 
-interface InitialSearchSymbolInformation {
+export interface InitialSearchSymbolInformation {
   fs_file_path: string;
   symbol_name: string;
   is_new: boolean;
@@ -606,19 +606,19 @@ interface InitialSearchSymbolInformation {
   range: Range;
 }
 
-interface SymbolToEditRequest {
+export interface SymbolToEditRequest {
   symbols: SymbolToEdit[];
   symbol_identifier: SymbolIdentifier;
 }
 
-interface SymbolToProbeHistory {
+export interface SymbolToProbeHistory {
   symbol: string;
   fs_file_path: string;
   content: string;
   question: string;
 }
 
-interface SymbolToProbeRequest {
+export interface SymbolToProbeRequest {
   symbol_identifier: SymbolIdentifier;
   probe_request: string;
   original_request: string;
@@ -626,7 +626,7 @@ interface SymbolToProbeRequest {
   history: SymbolToProbeHistory[];
 }
 
-interface ToolInput {
+export interface ToolInput {
   CodeEditing?: CodeEdit;
   LSPDiagnostics?: LSPDiagnostics;
   FindCodeSnippets?: FindCodeSnippets;
@@ -664,7 +664,7 @@ interface ToolInput {
   GrepSymbolInCodebase?: LSPGrepSymbolInCodebaseRequest;
 }
 
-interface CodeEdit {
+export interface CodeEdit {
   code_above?: string;
   code_below?: string;
   fs_file_path: string;
@@ -705,36 +705,36 @@ export interface FindCodeSnippets {
   provider: LLMProvider;
 }
 
-interface ReRankCodeSnippet {
+export interface ReRankCodeSnippet {
   fs_file_path: string;
   range: SidecarRequestRange;
   content: string;
   language: string;
 }
 
-interface ReRankDocument {
+export interface ReRankDocument {
   document_name: string;
   document_path: string;
   content: string;
 }
 
-interface ReRankWebExtract {
+export interface ReRankWebExtract {
   url: string;
   content: string;
 }
 
-interface ReRankEntry {
+export interface ReRankEntry {
   CodeSnippet: ReRankCodeSnippet;
   Document: ReRankDocument;
   WebExtract: ReRankWebExtract;
 }
 
-interface ReRankEntries {
+export interface ReRankEntries {
   id: number;
   entry: ReRankEntry;
 }
 
-interface ReRankRequestMetadata {
+export interface ReRankRequestMetadata {
   model: LLMTypeVariant;
   query: string;
   provider_keys: Record<string, any>;
@@ -759,7 +759,7 @@ export interface CodeSymbolUtilitySearch {
   user_context: UserContext;
 }
 
-interface CodeSymbolImportantRequest {
+export interface CodeSymbolImportantRequest {
   symbol_identifier?: string;
   history: string[];
   fs_file_path: string;
@@ -838,12 +838,12 @@ export type SidecarExecuteTerminalCommandRequest = {
   wait_for_exit: boolean;
 };
 
-interface OpenFileRequest {
+export interface OpenFileRequest {
   fs_file_path: string;
   editor_url: string;
 }
 
-interface FindInFileRequest {
+export interface FindInFileRequest {
   file_contents: string;
   file_symbol: string;
 }

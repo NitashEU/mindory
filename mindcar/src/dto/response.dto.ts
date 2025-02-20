@@ -1,12 +1,10 @@
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
 export interface HealthCheckResponse {
-  status: 'ok' | 'error';
-  timestamp: string;
   done: boolean;
-  details?: {
-    database?: boolean;
-    cache?: boolean;
-    services?: Record<string, boolean>;
-  };
 }
 
 export interface ConfigResponse {
@@ -16,4 +14,8 @@ export interface ConfigResponse {
 export interface VersionResponse {
   version_hash: string;
   package_version: string;
+}
+
+export interface ReachTheDevsResponse {
+  response: string;
 }
