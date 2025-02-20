@@ -48,8 +48,11 @@
 									</p>
 								</div>
 							</div>
-							<div class="mt-4 flex justify-between text-sm text-gray-500">
-								<div>Updated {{ formatDate(repo.updated_at) }}</div>
+							<div class="mt-4 flex justify-between items-center text-sm">
+								<div class="text-gray-500">Updated {{ formatDate(repo.updated_at) }}</div>
+								<div v-if="repo.vectorized" class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+									Vectorized
+								</div>
 							</div>
 						</div>
 					</div>
@@ -65,13 +68,25 @@
 					<div class="space-y-4">
 						<div>
 							<label class="block text-sm font-medium text-gray-700">Name</label>
-							<input v-model="newRepo.name" type="text" required
-										 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+							<input 
+								v-model="newRepo.name" 
+								type="text" 
+								required
+								pattern=".{3,}"
+								title="Repository name must be at least 3 characters long"
+								class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+							/>
 						</div>
 						<div>
 							<label class="block text-sm font-medium text-gray-700">URL</label>
-							<input v-model="newRepo.url" type="url" required
-										 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+							<input 
+								v-model="newRepo.url" 
+								type="url" 
+								required
+								pattern="^https?://.*"
+								title="Please enter a valid repository URL starting with http:// or https://"
+								class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+							/>
 						</div>
 						<div>
 							<label class="block text-sm font-medium text-gray-700">Description</label>
@@ -84,15 +99,29 @@
 										 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
 						</div>
 					</div>
-					<div class="mt-4 flex justify-end space-x-2">
-						<button type="button" @click="showAddModal = false"
-										class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
-							Cancel
-						</button>
-						<button type="submit"
-										class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
-							Add Repository
-						</button>
+					<div class="mt-4">
+						<div v-if="error" class="mb-4 text-sm text-red-600">
+							{{ error }}
+						</div>
+						<div v-if="loading" class="mb-4 text-sm text-gray-600">
+							{{ processingMessage }}
+						</div>
+						<div class="flex justify-end space-x-2">
+							<button 
+								type="button" 
+								@click="showAddModal = false"
+								:disabled="loading"
+								class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50">
+								Cancel
+							</button>
+							<button 
+								type="submit"
+								:disabled="loading"
+								class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 flex items-center space-x-2">
+								<span v-if="loading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+								<span>{{ loading ? 'Processing...' : 'Add Repository' }}</span>
+							</button>
+						</div>
 					</div>
 				</form>
 			</div>
@@ -113,6 +142,7 @@ interface Repository {
 	created_at: string;
 	updated_at: string;
 	user_id: string;
+	vectorized: boolean;
 }
 
 const supabase = useSupabaseClient();
@@ -126,6 +156,7 @@ const newRepo = ref({
 	description: '',
 	icon: ''
 });
+const processingMessage = ref('');
 
 const formatDate = (date: string) => {
 	return new Date(date).toLocaleDateString('en-US', {
@@ -157,9 +188,35 @@ const fetchRepositories = async () => {
 
 const handleAddRepository = async () => {
 	try {
+		if (!newRepo.value.url.trim() || !newRepo.value.name.trim()) {
+			error.value = 'Repository name and URL are required';
+			return;
+		}
+
+		loading.value = true;
+		processingMessage.value = 'Fetching repository...';
 		const { data: { user } } = await supabase.auth.getUser();
 		if (!user) throw new Error('Not authenticated');
 
+		processingMessage.value = 'Processing and vectorizing code...';
+		const processResult = await fetch('http://127.0.0.1:3000/api/codebase-input/repo', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				repoUrl: newRepo.value.url,
+				vectorize: true,
+				includeDocs: true
+			})
+		});
+
+		if (!processResult.ok) {
+			const errorData = await processResult.json().catch(() => ({}));
+			throw new Error(errorData.message || 'Failed to process repository');
+		}
+
+		const processData = await processResult.json();
+
+		processingMessage.value = 'Saving repository...';
 		const { error: err } = await supabase
 			.from('repositories')
 			.insert({
@@ -167,17 +224,26 @@ const handleAddRepository = async () => {
 				url: newRepo.value.url,
 				description: newRepo.value.description || null,
 				icon: newRepo.value.icon || null,
-				user_id: user.id
+				user_id: user.id,
+				vectorized: processData.vectorized || false
 			});
 
-		if (err) throw err;
+		if (err) {
+			if (err.code === '23505') { // Unique constraint error
+				throw new Error('A repository with this URL already exists');
+			}
+			throw err;
+		}
 		
 		showAddModal.value = false;
 		newRepo.value = { name: '', url: '', description: '', icon: '' };
 		await fetchRepositories();
-	} catch (err) {
-		error.value = 'Failed to add repository';
+	} catch (err: any) {
+		error.value = err.message || 'Failed to add repository';
 		console.error('Error:', err);
+	} finally {
+		loading.value = false;
+		processingMessage.value = '';
 	}
 };
 

@@ -55,28 +55,52 @@
         </div>
       </div>
 
-      <!-- Preview Panel -->
-      <div class="w-80 border-l border-gray-200 bg-gray-50 overflow-y-auto">
+        <!-- Search Results Panel -->
+        <div v-if="searchResults.length > 0" class="w-80 border-l border-gray-200 bg-gray-50 overflow-y-auto">
+        <div class="p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">Search Results</h3>
+          <ul>
+          <li v-for="(result, index) in searchResults" :key="index" class="mb-6 p-4 bg-white rounded-lg shadow hover:shadow-md">
+            <h4 class="text-md font-semibold text-blue-600">{{ result.entity.name }} ({{ result.entity.type }})</h4>
+            <p class="text-sm text-gray-500 mb-2">File: {{ result.entity.filePath }} (Lines: {{ result.entity.startLine }}-{{ result.entity.endLine }})</p>
+            <p class="text-sm text-gray-700 mb-2">Score: {{ result.score.toFixed(2) }}</p>
+            <pre class="bg-gray-100 p-2 rounded text-xs overflow-x-auto"><code>{{ result.entity.content }}</code></pre>
+            <div v-if="result.dependencies && result.dependencies.length > 0" class="mt-2">
+            <p class="text-sm font-semibold text-gray-700">Dependencies:</p>
+            <ul class="list-disc pl-4 text-sm text-gray-600">
+              <li v-for="(dep, depIndex) in result.dependencies" :key="depIndex">{{ dep.dependency_name }} ({{ dep.dependency_type }})</li>
+            </ul>
+            </div>
+          </li>
+          </ul>
+        </div>
+        </div>
+        <div v-else-if="searchQuery && !isLoading" class="w-80 border-l border-gray-200 bg-gray-50 overflow-y-auto p-4 text-center text-gray-500">
+        No results found for "{{ searchQuery }}"
+        </div>
+        
+        <!-- Preview Panel -->
+        <div v-if="!searchResults.length" class="w-80 border-l border-gray-200 bg-gray-50 overflow-y-auto">
         <div v-if="selectedNode" class="p-4">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium text-gray-900">{{ selectedNode.label }}</h3>
-            <span 
-              class="px-2 py-1 text-xs rounded-full"
-              :class="{
-                'bg-green-100 text-green-800': selectedNode.type === 'document',
-                'bg-blue-100 text-blue-800': selectedNode.type === 'topic',
-                'bg-yellow-100 text-yellow-800': selectedNode.type === 'entity'
-              }"
-            >
-              {{ selectedNode.type }}
-            </span>
+          <h3 class="text-lg font-medium text-gray-900">{{ selectedNode.label }}</h3>
+          <span 
+            class="px-2 py-1 text-xs rounded-full"
+            :class="{
+            'bg-green-100 text-green-800': selectedNode.type === 'document',
+            'bg-blue-100 text-blue-800': selectedNode.type === 'topic',
+            'bg-yellow-100 text-yellow-800': selectedNode.type === 'entity'
+            }"
+          >
+            {{ selectedNode.type }}
+          </span>
           </div>
           <pre class="mt-4 p-3 bg-gray-100 rounded-lg overflow-x-auto text-sm"><code>{{ formatPreview(selectedNode) }}</code></pre>
         </div>
         <div v-else class="p-4 text-gray-500 text-center">
           Select a node to view details
         </div>
-      </div>
+        </div>
     </div>
   </div>
 </template>
@@ -127,6 +151,7 @@ const isLoading = ref(false);
 const graphContainer = ref<HTMLElement | null>(null);
 const selectedNode = ref<GraphNode | null>(null);
 const graphData = ref<RagGraphData>({ nodes: [], links: [] });
+const searchResults = ref<SearchResult[]>([]);
 const collaborationState = ref<CollaborationState>({
   users: new Map(),
   selectedNodes: new Set()
@@ -278,16 +303,16 @@ const performSearch = async () => {
   if (!searchQuery.value.trim()) return;
   
   isLoading.value = true;
+  searchResults.value = [];
+  
   try {
-    const response = await fetch('/api/graph-rag/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: searchQuery.value })
-    });
-    
+    const response = await fetch(`/api/code/search?query=${encodeURIComponent(searchQuery.value)}`);
     if (!response.ok) throw new Error('Search failed');
     
-    const results: SearchResult[] = await response.json();
+    const results = await response.json();
+    searchResults.value = results;
+    
+    // Update graph with search results
     graphData.value = transformSearchResults(results);
     updateGraph();
     

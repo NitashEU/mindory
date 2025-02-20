@@ -1,8 +1,18 @@
 export interface SearchResult {
-  id: string;
+  entity: {
+    type: "function" | "class" | "method" | "table";
+    name: string;
+    content: string;
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    dependencies: string[];
+  };
   score: number;
-  source: 'neo4j' | 'weaviate';
-  data: Record<string, any>;
+  dependencies?: Array<{
+    dependency_name: string;
+    dependency_type: string;
+  }>;
 }
 
 export interface GraphNode {
